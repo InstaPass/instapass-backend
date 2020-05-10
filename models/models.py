@@ -10,8 +10,11 @@ class User(db.Model):
     username = db.Column('username', db.String(32))
     password = db.Column('password', db.String(32))
 
-    def __repr__(self):
-        return '<User %r>' % self.username
+
+class Community(db.Model):
+    id = db.Column('id', db.Integer, primary_key=True)
+    name = db.Column('name', db.String(32))
+    address = db.Column('address', db.String(1 << 12))
 
 
 class Family(db.Model):
@@ -21,6 +24,11 @@ class Family(db.Model):
 
 class Dweller(db.Model):
     id = db.Column('id', db.Integer, primary_key=True)
+    community_id = db.Column('community_id', db.String(32))
+    name = db.Column('real_name', db.String(32))
+    id_number = db.Column('id_number', db.String(32))
+    phone = db.Column('phone', db.String(32))
+    email_address = db.Column('email_address', db.String(64))
     family_id = db.Column('family_id', db.Integer)
     last_access_time = db.Column('last_access_time', db.Integer)
     face_data = db.String('face_data', db.String(1 << 15))
@@ -29,16 +37,19 @@ class Dweller(db.Model):
 
 class Admin(db.Model):
     id = db.Column('id', db.Integer, primary_key=True)
+    community_id = db.Column('community_id', db.String(32))
     level = db.Column('level', db.Integer)
 
 
 class Monitor(db.Model):
     id = db.Column('id', db.Integer, primary_key=True)
+    community_id = db.Column('community_id', db.String(32))
     working_until = db.Column('working_until', db.Integer)
 
 
 class Notice(db.Model):
     id = db.Column('id', db.Integer, primary_key=True)
+    community_id = db.Column('community_id', db.String(32))
     sender_id = db.Column('sender_id', db.Integer)
     title = db.String('title', db.String(64))
     content = db.Column('content', db.String(1 << 12))
@@ -46,6 +57,7 @@ class Notice(db.Model):
 
 class Log(db.Model):
     id = db.Column('id', db.Integer, primary_key=True)
+    community_id = db.Column('community_id', db.String(32))
     user_id = db.Column('user_id', db.Integer)
     access_time = db.Column('access_time', db.Integer)
     temperature = db.Column('temperature', db.Float)
