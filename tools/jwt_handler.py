@@ -16,8 +16,13 @@ def user_id_encode(user_id: int):
     return str(jwt.encode({'id': user_id, 'exp': ts(86400)}, secret_key, algorithm='HS256'), encoding='utf-8')
 
 
-def user_id_decode(jwt_str: str):
+def decode(jwt_str: str):
     try:
         return jwt.decode(bytes(jwt_str, encoding='utf-8'), secret_key, algorithm='HS256')
     except jwt.exceptions.DecodeError:
         return {}
+
+
+def qrcode_encode(user_id: int, community: int):
+    return str(jwt.encode({'id': user_id, 'community_id': community, 'exp': ts(60)}, secret_key, algorithm='HS256'),
+               encoding='utf-8')

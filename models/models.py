@@ -24,7 +24,7 @@ class Family(db.Model):
 
 class Dweller(db.Model):
     id = db.Column('id', db.Integer, primary_key=True)
-    community_id = db.Column('community_id', db.String(32))
+    community_id = db.Column('community_id', db.Integer)
     name = db.Column('real_name', db.String(32))
     id_number = db.Column('id_number', db.String(32))
     phone = db.Column('phone', db.String(32))
@@ -37,19 +37,19 @@ class Dweller(db.Model):
 
 class Admin(db.Model):
     id = db.Column('id', db.Integer, primary_key=True)
-    community_id = db.Column('community_id', db.String(32))
+    community_id = db.Column('community_id', db.Integer)
     level = db.Column('level', db.Integer)
 
 
 class Monitor(db.Model):
     id = db.Column('id', db.Integer, primary_key=True)
-    community_id = db.Column('community_id', db.String(32))
+    community_id = db.Column('community_id', db.Integer)
     working_until = db.Column('working_until', db.Integer)
 
 
 class Notice(db.Model):
     id = db.Column('id', db.Integer, primary_key=True)
-    community_id = db.Column('community_id', db.String(32))
+    community_id = db.Column('community_id', db.Integer)
     sender_id = db.Column('sender_id', db.Integer)
     title = db.String('title', db.String(64))
     content = db.Column('content', db.String(1 << 12))
@@ -57,7 +57,7 @@ class Notice(db.Model):
 
 class Log(db.Model):
     id = db.Column('id', db.Integer, primary_key=True)
-    community_id = db.Column('community_id', db.String(32))
+    community_id = db.Column('community_id', db.Integer)
     user_id = db.Column('user_id', db.Integer)
     access_time = db.Column('access_time', db.Integer)
     temperature = db.Column('temperature', db.Float)
