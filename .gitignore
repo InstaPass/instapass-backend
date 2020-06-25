@@ -3,3 +3,4 @@ venv
 password.txt
 secret.txt
 __pycache__
+*.pem
