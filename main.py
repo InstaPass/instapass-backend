@@ -187,7 +187,7 @@ def get_qrcode(id):
                 "last_refresh_time": ts(),
                 "secret": "instapass{%s}" % qrcode_encode(g.dweller[0].id, id)}
     else:
-        return {"status": "error"}, 403
+        return {"status": "error", "msg": "you're not in this community"}, 403
 
 
 @app.route('/resident/community', methods=['GET'])
@@ -264,7 +264,8 @@ def resident_retrieve_notifications():
             "community": community_map[notice.community_id].name,
             "address": community_map[notice.community_id].address,
             "content": notice.content,
-            "author": notice.author
+            "author": notice.author,
+            "release_time": notice.create_time
         })
     db.session.commit()
     return {"status": "ok", "last_retrieve_time": user.last_retrieve_time, "notifications": notifications}
@@ -426,7 +427,8 @@ def admin_retrieve_notifications():
             "community": community_map[notice.community_id].name,
             "address": community_map[notice.community_id].address,
             "content": notice.content,
-            "author": notice.author
+            "author": notice.author,
+            "release_time": notice.create_time
         })
     db.session.commit()
     return {"status": "ok", "last_retrieve_time": user.last_retrieve_time, "notifications": notifications}
