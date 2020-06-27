@@ -23,6 +23,11 @@ def decode(jwt_str: str):
         return {}
 
 
-def qrcode_encode(user_id: int, community: int):
-    return str(jwt.encode({'id': user_id, 'community_id': community, 'exp': ts(60)}, secret_key, algorithm='HS256'),
-               encoding='utf-8')
+def access_qrcode_encode(user_id: int, community: int):
+    return str(jwt.encode({'type': 'access', 'id': user_id, 'community_id': community, 'exp': ts(60)}, secret_key,
+                          algorithm='HS256'), encoding='utf-8')
+
+
+def create_qrcode_encode(community: int, temp: bool, reason: str):
+    return str(jwt.encode({'type': 'create', 'community_id': community, 'temp': temp, 'exp': ts(60), 'reason': reason},
+                          secret_key, algorithm='HS256'), encoding='utf-8')

@@ -32,7 +32,11 @@ def is_role(user_id: int, role):
 def in_community(community_id: int, manage_list):
     for manage in manage_list:
         if community_id == manage.community_id:
-            return manage
+            if isinstance(manage, Dweller) and manage.temp and not manage.inside:
+                return None
+            else:
+                return manage
+
     return None
 
 
@@ -200,23 +204,27 @@ def get_qrcode(id):
     if in_community(id, g.dweller):
         return {"status": "ok",
                 "last_refresh_time": ts(),
-                "secret": "instapass{%s}" % qrcode_encode(g.dweller[0].id, id)}
+                "secret": "instapass{%s}" % access_qrcode_encode(g.dweller[0].id, id)}
     else:
         return {"status": "error", "msg": "you're not in this community"}, 403
 
 
 @app.route('/resident/community', methods=['GET'])
-@dweller_required
+@login_required
 def get_community_info():
     communities = []
     community_map = {}
-    for d in g.dweller:
-        community_map[d.community_id] = Community.query.filter_by(id=d.community_id).first()
+    dweller = is_role(g.id, Dweller)
+    if dweller:
+        for d in dweller:
+            community_map[d] = Community.query.filter_by(id=d.community_id).first()
     for c in community_map:
         communities.append({
             "community_id": community_map[c].id,
             "community": community_map[c].name,
-            "address": community_map[c].address
+            "address": community_map[c].address,
+            "inside": c.inside,
+            "temporary": c.temp
         })
     return {"status": "ok", "communities": communities}
 
@@ -225,19 +233,34 @@ def get_community_info():
 @login_required
 def enter_community():
     try:
-        invitation_code = request.json['invitation_code']
-        community_id = valid_invitation(invitation_code)
-        if community_id == -1:
-            return {"status": "error"}, 400
-        else:
-            if Dweller.query.filter_by(id=g.id, community_id=community_id).first():
+        secret = request.json['secret']
+        jwt_secret = re.match("instapass{(.*)}", secret).groups()[0]
+        qr_json = decode(jwt_secret)
+        if qr_json["type"] != "create":
+            return {"status": "err", "msg": "qrcode is not correct"}, 400
+        community_id = qr_json["community_id"]
+        temp = qr_json["temp"]
+        dweller = Dweller.query.filter_by(id=g.id, community_id=community_id).first()
+        if dweller:
+            if dweller.temp and not dweller.inside:
+                dweller.inside = True
+            else:
                 return {"status": "error", "message": "you have entered this community"}, 400
-            db.session.add(Dweller(id=g.id, community_id=community_id, last_access_time=0))
-            db.session.commit()
-            community = Community.query.filter_by(id=community_id).first()
-            return {"status": "ok", "community_id": community_id, "community": community.name}
+            dweller.temp = temp
+        else:
+            dweller = Dweller(id=g.id, community_id=community_id, last_access_time=0, inside=True, temp=temp)
+            db.session.add(dweller)
+        if dweller.temp:
+            db.session.add(Log(community_id=dweller.community_id, user_id=dweller.id, temperature=37.0,
+                               note=qr_json['reason'], access_time=ts(),
+                               inside='inside' if dweller.inside else 'outside'))
+        db.session.commit()
+        community = Community.query.filter_by(id=community_id).first()
+        return {"status": "ok", "temporary": temp, "community_id": community_id, "community": community.name}
     except KeyError:
         return params_not_given()
+    except ExpiredSignatureError:
+        return {"status": "err", "msg": "qrcode has expired"}, 400
 
 
 @app.route('/resident/community/leave', methods=['POST'])
@@ -354,6 +377,8 @@ def certificate():
         })
         id_number = resp.json()["msg"]["idcardno"]
         real_name = resp.json()["msg"]["name"]
+        if not id_number or not real_name:
+            return {"status": "error", "msg": "picture given is not correct"}, 400
         u = User.query.filter_by(id_number=id_number, name=real_name).first()
         if not u:
             db.session.add(User(id_number=id_number, name=real_name, last_retrieve_time=0))
@@ -373,13 +398,15 @@ def validate_qrcode():
         secret = request.json['secret']
         jwt_secret = re.match("instapass{(.*)}", secret).groups()[0]
         qr_json = decode(jwt_secret)
+        if qr_json["type"] != "access":
+            return {"status": "err", "msg": "qrcode is not correct"}, 400
         guard = in_community(qr_json['community_id'], g.guard)
         if guard and guard.working_until > ts():
-            db.session.add(Log(community_id=qr_json['community_id'], user_id=qr_json['id'], temperature=37.0,
-                               note=reason, access_time=ts()))
             dweller = Dweller.query.filter_by(id=qr_json['id']).first()
             dweller.last_access_time = ts()
             dweller.inside = not dweller.inside
+            db.session.add(Log(community_id=qr_json['community_id'], user_id=qr_json['id'], temperature=37.0,
+                               note=reason, access_time=ts(), inside='inside' if dweller.inside else 'outside'))
             db.session.commit()
             return {"status": "ok", "validation": "accepted"}
         else:
@@ -388,6 +415,25 @@ def validate_qrcode():
         return params_not_given()
     except ExpiredSignatureError:
         return {"status": "err", "msg": "qrcode has expired"}, 400
+
+
+@app.route('/generate/qrcode', methods=['POST'])
+@guard_required
+def generate_qrcode():
+    try:
+        community_id = request.json["community_id"]
+        temp = request.json["temporary"]
+        if temp:
+            reason = request.json['reason']
+        else:
+            reason = ""
+        return {
+            "status": "ok",
+            "last_refresh_time": ts(),
+            "secret": f"instapass{{{create_qrcode_encode(community_id, temp, reason)}}}"
+            }
+    except KeyError:
+        return params_not_given()
 
 
 @app.route("/guard/checkin", methods=['POST'])
@@ -421,6 +467,8 @@ def guard_checkout():
     except KeyError:
         return params_not_given()
 
+# Admin
+
 
 @app.route('/admin/notify/release', methods=['POST'])
 @admin_required
@@ -438,8 +486,6 @@ def release_notification():
         return {"status": "ok"}
     except KeyError:
         return params_not_given()
-
-# Admin
 
 
 @app.route('/admin/notifications', methods=['GET'])

@@ -36,6 +36,7 @@ class Dweller(db.Model):
     last_access_time = db.Column('last_access_time', db.Integer)
     inside = db.Column('inside', db.Boolean)
     health_status = db.Column('health_status', db.Integer)
+    temp = db.Column('temp', db.Boolean)  # 0: dweller, 1: temp user
 
 
 class Admin(db.Model):
@@ -64,6 +65,7 @@ class Notice(db.Model):
 class Log(db.Model):
     id = db.Column('id', db.Integer, primary_key=True)
     community_id = db.Column('community_id', db.Integer)
+    inside = db.Column('inside', db.String(11))
     user_id = db.Column('user_id', db.Integer)
     access_time = db.Column('access_time', db.Integer)
     temperature = db.Column('temperature', db.Float)
