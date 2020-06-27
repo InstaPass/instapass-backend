@@ -157,7 +157,7 @@ def admin_required(f):
 def after(resp):
     resp.headers['Access-Control-Allow-Origin'] = '*'
     resp.headers['Access-Control-Allow-Method'] = '*'
-    resp.headers['Access-Control-Allow-Headers'] = 'x-requested-with,content-type'
+    resp.headers['Access-Control-Allow-Headers'] = 'X-Requested-With,Content-Type,Jwt-Token'
     return resp
 
 
