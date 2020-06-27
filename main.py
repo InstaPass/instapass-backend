@@ -153,6 +153,13 @@ def admin_required(f):
 
 # API Gateways
 
+@app.after_request
+def after(resp):
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    resp.headers['Access-Control-Allow-Method'] = '*'
+    resp.headers['Access-Control-Allow-Headers'] = 'x-requested-with,content-type'
+    return resp
+
 
 @app.route('/need_login_test')
 @dweller_required
@@ -446,6 +453,11 @@ def admin_invite(id):
 @app.errorhandler(405)
 def method_not_allowed(error):
     return {"msg": "method not allowed", "status": "err"}, 405
+
+
+@app.errorhandler(500)
+def internal_server_error(error):
+    return {"msg": "server is trapped in trouble. Please try again later."}, 500
 
 
 if __name__ == "__main__":
