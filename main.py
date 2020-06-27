@@ -224,7 +224,8 @@ def get_community_info():
             "community": community_map[c].name,
             "address": community_map[c].address,
             "inside": c.inside,
-            "temporary": c.temp
+            "temporary": c.temp,
+            "strategy": "无限制"
         })
     return {"status": "ok", "communities": communities}
 
