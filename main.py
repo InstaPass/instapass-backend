@@ -4,6 +4,7 @@ from flask import *
 from functools import wraps
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import and_
+import requests
 import config.dbinfo
 import re
 import os
@@ -171,17 +172,24 @@ def need_login_test():
 def login(role):
     role_table = {"admin": Admin, "guard": Monitor, "resident": Dweller}
     try:
-        success, token, user_id = valid_login(request.json['username'], request.json['password'])
-        if success:
-            try:
-                if role != "resident" and not is_role(user_id, role_table[role]):
-                    return {"status": "error", "msg": f"You're not {role}"}, 403
-                else:
-                    return {"jwt_token": token}
-            except KeyError:
-                return {"status": "error", "msg": f"No role named {role}"}, 403
+        if role != "resident":
+            success, token, user_id = valid_login(request.json['username'], request.json['password'])
+            if success:
+                try:
+                    if not is_role(user_id, role_table[role]):
+                        return {"status": "error", "msg": f"You're not {role}"}, 403
+                    else:
+                        return {"status": "ok", "jwt_token": token}
+                except KeyError:
+                    return {"status": "err", "msg": f"No role named {role}"}, 403
+            else:
+                return {"status": "err", "msg": "Wrong username or password"}, 401
         else:
-            return {"status": "err", "msg": "Wrong username or password"}, 401
+            u = User.query.filter_by(name=request.json["realname"], id_number=request.json["id_number"]).first()
+            if u:
+                return {"status": "ok", "jwt_token": user_id_encode(u.id)}
+            else:
+                return {"status": "err", "msg": "no such user"}, 401
     except KeyError:
         return params_not_given()
 
@@ -329,6 +337,30 @@ def get_info():
             return {"status": "ok"}
         except KeyError:
             return params_not_given()
+
+
+@app.route('/resident/certificate', methods=['POST'])
+def certificate():
+    try:
+        pic = request.json["id_card_snapshot"]
+        match = re.match("data:image/.*;base64,(.*)", pic)
+        if match:
+            pic = match.groups()[0]
+        resp = requests.post("https://shenfenzhe.market.alicloudapi.com/do", files={
+            "image": (None, pic),
+            "id_card_side": (None, "front")
+        }, headers={
+            'Authorization': 'APPCODE b6925f533db7458f8dd7c5a8d509d2ad'
+        })
+        id_number = resp.json()["msg"]["idcardno"]
+        real_name = resp.json()["msg"]["name"]
+        u = User.query.filter_by(id_number=id_number, name=real_name).first()
+        if not u:
+            db.session.add(User(id_number=id_number, name=real_name, last_retrieve_time=0))
+            db.session.commit()
+        return {"status": "ok", "realname": real_name, "id_number": id_number}
+    except KeyError:
+        return {"status": "error", "msg": "picture given is not correct"}, 400
 
 
 # Guard

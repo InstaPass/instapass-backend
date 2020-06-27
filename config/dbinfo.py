@@ -1,4 +1,4 @@
-HOST = '47.100.50.175'
+HOST = '127.0.0.1'
 PORT = '3306'
 DATABASE = 'instadb'
 USERNAME = 'instapass'

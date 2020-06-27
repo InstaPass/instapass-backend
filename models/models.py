@@ -35,7 +35,6 @@ class Dweller(db.Model):
     family_id = db.Column('family_id', db.Integer)
     last_access_time = db.Column('last_access_time', db.Integer)
     inside = db.Column('inside', db.Boolean)
-    face_data = db.String('face_data', db.String(1 << 15))
     health_status = db.Column('health_status', db.Integer)
 
 
