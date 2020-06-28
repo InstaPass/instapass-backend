@@ -1,3 +1,5 @@
+from models.models import *
+from tools.jwt_handler import *
 import binascii
 
 from flask import *
@@ -14,8 +16,6 @@ app = Flask(__name__)
 app.config.from_object(config.dbinfo)
 db = SQLAlchemy(app)
 
-from tools.jwt_handler import *
-from models.models import *
 
 db.create_all()
 
@@ -41,7 +41,7 @@ def in_community(community_id: int, manage_list):
 
 
 def params_not_given():
-    return {"status": "err", "msg": "params not given"}, 400
+    return {"status": "err", "msg": "登录参数错误"}, 400
 
 
 def valid_login(username: str, password: str):
@@ -81,11 +81,11 @@ def login_required(f):
         try:
             token = decode(request.headers['Jwt-Token'])
         except KeyError:
-            return {"status": "error", "msg": "You're not login"}, 401
+            return {"status": "error", "msg": "尚未登录"}, 401
         if token == {}:
-            return {"status": "error", "msg": "You're not login"}, 401
+            return {"status": "error", "msg": "尚未登录"}, 401
         if token['exp'] < ts():
-            return {"status": "error", "msg": "Login expired"}, 401
+            return {"status": "error", "msg": "会话过期"}, 401
         g.id = token['id']
         g.user = User.query.filter_by(id=g.id).first()
         return f(*args, **kwargs)
@@ -100,13 +100,13 @@ def dweller_required(f):
             token = decode(request.headers['Jwt-Token'])
             dweller = is_role(token['id'], Dweller)
             if not dweller:
-                return {"status": "error", "msg": "You're not a dweller"}, 403
+                return {"status": "error", "msg": "非居民账户"}, 403
         except KeyError:
-            return {"status": "error", "msg": "You're not login"}, 401
+            return {"status": "error", "msg": "尚未登录"}, 401
         if token == {}:
-            return {"status": "error", "msg": "You're not login"}, 401
+            return {"status": "error", "msg": "尚未登录"}, 401
         if token['exp'] < ts():
-            return {"status": "error", "msg": "Login expired"}, 401
+            return {"status": "error", "msg": "会话过期"}, 401
         g.dweller = dweller
         g.id = token['id']
         return f(*args, **kwargs)
@@ -121,13 +121,13 @@ def guard_required(f):
             token = decode(request.headers['Jwt-Token'])
             guard = is_role(token["id"], Monitor)
             if not guard:
-                return {"status": "error", "msg": "You're not a guard"}, 403
+                return {"status": "error", "msg": "非保安账户"}, 403
         except KeyError:
-            return {"status": "error", "msg": "You're not login"}, 401
+            return {"status": "error", "msg": "尚未登录"}, 401
         if token == {}:
-            return {"status": "error", "msg": "You're not login"}, 401
+            return {"status": "error", "msg": "尚未登录"}, 401
         if token['exp'] < ts():
-            return {"status": "error", "msg": "Login expired"}, 401
+            return {"status": "error", "msg": "会话过期"}, 401
         g.guard = guard
         g.id = token['id']
         return f(*args, **kwargs)
@@ -142,13 +142,13 @@ def admin_required(f):
             token = decode(request.headers['Jwt-Token'])
             admin = is_role(token["id"], Admin)
             if not admin:
-                return {"status": "error", "msg": "You're not an admin"}, 403
+                return {"status": "error", "msg": "非管理员账户"}, 403
         except KeyError:
-            return {"status": "error", "msg": "You're not login"}, 401
+            return {"status": "error", "msg": "尚未登录"}, 401
         if token == {}:
-            return {"status": "error", "msg": "You're not login"}, 401
+            return {"status": "error", "msg": "尚未登录"}, 401
         if token['exp'] < ts():
-            return {"status": "error", "msg": "Login expired"}, 401
+            return {"status": "error", "msg": "会话过期"}, 401
         g.admin = admin
         g.id = token['id']
         return f(*args, **kwargs)
@@ -177,23 +177,25 @@ def login(role):
     role_table = {"admin": Admin, "guard": Monitor, "resident": Dweller}
     try:
         if role != "resident":
-            success, token, user_id = valid_login(request.json['username'], request.json['password'])
+            success, token, user_id = valid_login(
+                request.json['username'], request.json['password'])
             if success:
                 try:
                     if not is_role(user_id, role_table[role]):
-                        return {"status": "error", "msg": f"You're not {role}"}, 403
+                        return {"status": "error", "msg": f"非 {role} 角色"}, 403
                     else:
                         return {"status": "ok", "jwt_token": token}
                 except KeyError:
-                    return {"status": "err", "msg": f"No role named {role}"}, 403
+                    return {"status": "err", "msg": f"无 {role} 角色"}, 403
             else:
-                return {"status": "err", "msg": "Wrong username or password"}, 401
+                return {"status": "err", "msg": "无效凭据"}, 401
         else:
-            u = User.query.filter_by(name=request.json["realname"], id_number=request.json["id_number"]).first()
+            u = User.query.filter_by(
+                name=request.json["realname"], id_number=request.json["id_number"]).first()
             if u:
                 return {"status": "ok", "jwt_token": user_id_encode(u.id)}
             else:
-                return {"status": "err", "msg": "no such user"}, 401
+                return {"status": "err", "msg": "无此用户"}, 401
     except KeyError:
         return params_not_given()
 
@@ -206,7 +208,7 @@ def get_qrcode(id):
                 "last_refresh_time": ts(),
                 "secret": "instapass{%s}" % access_qrcode_encode(g.dweller[0].id, id)}
     else:
-        return {"status": "error", "msg": "you're not in this community"}, 403
+        return {"status": "error", "msg": "不属于此小区"}, 403
 
 
 @app.route('/resident/community', methods=['GET'])
@@ -217,7 +219,8 @@ def get_community_info():
     dweller = is_role(g.id, Dweller)
     if dweller:
         for d in dweller:
-            community_map[d] = Community.query.filter_by(id=d.community_id).first()
+            community_map[d] = Community.query.filter_by(
+                id=d.community_id).first()
     for c in community_map:
         communities.append({
             "community_id": community_map[c].id,
@@ -238,18 +241,20 @@ def enter_community():
         jwt_secret = re.match("instapass{(.*)}", secret).groups()[0]
         qr_json = decode(jwt_secret)
         if qr_json["type"] != "create":
-            return {"status": "err", "msg": "qrcode is not correct"}, 400
+            return {"status": "err", "msg": "无效 QR 码"}, 400
         community_id = qr_json["community_id"]
         temp = qr_json["temp"]
-        dweller = Dweller.query.filter_by(id=g.id, community_id=community_id).first()
+        dweller = Dweller.query.filter_by(
+            id=g.id, community_id=community_id).first()
         if dweller:
             if dweller.temp and not dweller.inside:
                 dweller.inside = True
             else:
-                return {"status": "error", "message": "you have entered this community"}, 400
+                return {"status": "error", "message": "已进入此小区"}, 400
             dweller.temp = temp
         else:
-            dweller = Dweller(id=g.id, community_id=community_id, last_access_time=0, inside=True, temp=temp)
+            dweller = Dweller(id=g.id, community_id=community_id,
+                              last_access_time=0, inside=True, temp=temp)
             db.session.add(dweller)
         if dweller.temp:
             db.session.add(Log(community_id=dweller.community_id, user_id=dweller.id, temperature=37.0,
@@ -261,7 +266,7 @@ def enter_community():
     except KeyError:
         return params_not_given()
     except ExpiredSignatureError:
-        return {"status": "err", "msg": "qrcode has expired"}, 400
+        return {"status": "err", "msg": "QR 码已过期"}, 400
 
 
 @app.route('/resident/community/leave', methods=['POST'])
@@ -272,7 +277,8 @@ def leave_community():
         if community_id == -1:
             return {"status": "error"}, 400
         else:
-            db.session.delete(Dweller.query.filter_by(id=g.id, community_id=community_id).first())
+            db.session.delete(Dweller.query.filter_by(
+                id=g.id, community_id=community_id).first())
             db.session.commit()
             return {"status": "ok"}
     except KeyError:
@@ -290,7 +296,8 @@ def resident_retrieve_notifications():
         if dweller.temp:
             continue
         communities.append(dweller.community_id)
-        community_map[dweller.community_id] = Community.query.filter_by(id=dweller.community_id).first()
+        community_map[dweller.community_id] = Community.query.filter_by(
+            id=dweller.community_id).first()
     last_retrieve_time = user.last_retrieve_time
     user.last_retrieve_time = ts()
     notifications = []
@@ -298,7 +305,8 @@ def resident_retrieve_notifications():
         notices = db.session.query(Notice).filter(and_(
             Notice.create_time >= last_retrieve_time, Notice.community_id.in_(communities))).all()
     else:
-        notices = db.session.query(Notice).filter(Notice.community_id.in_(communities)).all()
+        notices = db.session.query(Notice).filter(
+            Notice.community_id.in_(communities)).all()
     for notice in notices:
         notifications.append({
             "community_id": notice.community_id,
@@ -381,14 +389,15 @@ def certificate():
         id_number = resp.json()["msg"]["idcardno"]
         real_name = resp.json()["msg"]["name"]
         if not id_number or not real_name:
-            return {"status": "error", "msg": "picture given is not correct"}, 400
+            return {"status": "error", "msg": "无效图片"}, 400
         u = User.query.filter_by(id_number=id_number, name=real_name).first()
         if not u:
-            db.session.add(User(id_number=id_number, name=real_name, last_retrieve_time=0))
+            db.session.add(
+                User(id_number=id_number, name=real_name, last_retrieve_time=0))
             db.session.commit()
         return {"status": "ok", "realname": real_name, "id_number": id_number}
     except KeyError:
-        return {"status": "error", "msg": "picture given is not correct"}, 400
+        return {"status": "error", "msg": "无效图片"}, 400
 
 
 # Guard
@@ -402,7 +411,7 @@ def validate_qrcode():
         jwt_secret = re.match("instapass{(.*)}", secret).groups()[0]
         qr_json = decode(jwt_secret)
         if qr_json["type"] != "access":
-            return {"status": "err", "msg": "qrcode is not correct"}, 400
+            return {"status": "err", "msg": "无效 QR 码"}, 400
         guard = in_community(qr_json['community_id'], g.guard)
         if guard and guard.working_until > ts():
             dweller = Dweller.query.filter_by(id=qr_json['id']).first()
@@ -413,11 +422,11 @@ def validate_qrcode():
             db.session.commit()
             return {"status": "ok", "validation": "accepted"}
         else:
-            return {"status": "err", "msg": "permission denied"}, 403
+            return {"status": "err", "msg": "请求被拒绝"}, 403
     except KeyError:
         return params_not_given()
     except ExpiredSignatureError:
-        return {"status": "err", "msg": "qrcode has expired"}, 400
+        return {"status": "err", "msg": "QR 码已过期"}, 400
 
 
 @app.route('/generate/qrcode', methods=['POST'])
@@ -434,7 +443,7 @@ def generate_qrcode():
             "status": "ok",
             "last_refresh_time": ts(),
             "secret": f"instapass{{{create_qrcode_encode(community_id, temp, reason)}}}"
-            }
+        }
     except KeyError:
         return params_not_given()
 
@@ -450,7 +459,7 @@ def guard_checkin():
             db.session.commit()
             return {"status": "ok"}
         else:
-            return {"status": "err", "msg": "permission denied"}, 403
+            return {"status": "err", "msg": "请求被拒绝"}, 403
     except KeyError:
         return params_not_given()
 
@@ -466,7 +475,7 @@ def guard_checkout():
             db.session.commit()
             return {"status": "ok"}
         else:
-            return {"status": "err", "msg": "permission denied"}, 403
+            return {"status": "err", "msg": "请求被拒绝"}, 403
     except KeyError:
         return params_not_given()
 
@@ -482,7 +491,7 @@ def release_notification():
         content = request.json["notification"]["content"]
         community = Community.query.filter_by(id=community_id).first()
         if not community or not in_community(community_id, g.admin):
-            return {"status": "err", "msg": "permission denied"}, 403
+            return {"status": "err", "msg": "请求被拒绝"}, 403
         db.session.add(Notice(community_id=community_id, author=author, content=content, create_time=ts(),
                               sender_id=g.admin[0].id))
         db.session.commit()
@@ -500,7 +509,8 @@ def admin_retrieve_notifications():
     community_map = {}
     for admin in g.admin:
         communities.append(admin.community_id)
-        community_map[admin.community_id] = Community.query.filter_by(id=admin.community_id).first()
+        community_map[admin.community_id] = Community.query.filter_by(
+            id=admin.community_id).first()
     last_retrieve_time = user.last_retrieve_time
     user.last_retrieve_time = ts()
     notifications = []
@@ -508,7 +518,8 @@ def admin_retrieve_notifications():
         notices = db.session.query(Notice).filter(and_(
             Notice.create_time >= last_retrieve_time, Notice.community_id.in_(communities))).all()
     else:
-        notices = db.session.query(Notice).filter(Notice.community_id.in_(communities)).all()
+        notices = db.session.query(Notice).filter(
+            Notice.community_id.in_(communities)).all()
     for notice in notices:
         notifications.append({
             "community_id": notice.community_id,
@@ -533,12 +544,12 @@ def admin_invite(id):
 
 @app.errorhandler(405)
 def method_not_allowed(error):
-    return {"msg": "method not allowed", "status": "err"}, 405
+    return {"msg": "不允许的方法", "status": "err"}, 405
 
 
 @app.errorhandler(500)
 def internal_server_error(error):
-    return {"msg": "server is trapped in trouble. Please try again later."}, 500
+    return {"msg": "服务器内部错误"}, 500
 
 
 if __name__ == "__main__":
