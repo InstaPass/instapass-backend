@@ -267,7 +267,7 @@ def enter_community():
             if dweller.temp and not dweller.inside:
                 dweller.inside = True
             else:
-                return {"status": "error", "message": "已进入此小区"}, 400
+                return {"status": "error", "msg": "已进入此小区"}, 400
             dweller.temp = temp
         else:
             dweller = Dweller(id=g.id, community_id=community_id,
