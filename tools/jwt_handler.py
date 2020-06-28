@@ -1,6 +1,4 @@
 import jwt
-from main import db
-from models.models import *
 import time
 
 
