@@ -1,23 +1,19 @@
+import binascii
+import os
+import re
+from functools import wraps
+
+import requests
+from flask import *
+from jwt.exceptions import ExpiredSignatureError
+from sqlalchemy import and_
+
+import config.dbinfo
 from models.models import *
 from tools.jwt_handler import *
-import binascii
 
-from flask import *
-from functools import wraps
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import and_
-import requests
-import config.dbinfo
-import re
-import os
-from jwt.exceptions import ExpiredSignatureError
 
 app = Flask(__name__)
-app.config.from_object(config.dbinfo)
-db = SQLAlchemy(app)
-
-
-db.create_all()
 
 
 # finish init. Maybe do code refactor in the future.
@@ -157,6 +153,11 @@ def admin_required(f):
 
 
 # API Gateways
+
+@app.before_first_request
+def create_db():
+    db.create_all()
+
 
 @app.after_request
 def after(resp):
@@ -553,4 +554,6 @@ def internal_server_error(error):
 
 
 if __name__ == "__main__":
+    app.config.from_object(config.dbinfo)
+    db.init_app(app)
     app.run(host='0.0.0.0', port='8288')
