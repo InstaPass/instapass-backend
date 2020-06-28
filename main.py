@@ -287,6 +287,8 @@ def resident_retrieve_notifications():
     communities = []
     community_map = {}
     for dweller in g.dweller:
+        if dweller.temp:
+            continue
         communities.append(dweller.community_id)
         community_map[dweller.community_id] = Community.query.filter_by(id=dweller.community_id).first()
     last_retrieve_time = user.last_retrieve_time
