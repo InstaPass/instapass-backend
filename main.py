@@ -220,10 +220,16 @@ def login(role):
 @app.route('/resident/qrcode/<int:id>', methods=['GET'])
 @dweller_required
 def get_qrcode(id):
-    if in_community(id, g.dweller):
-        return {"status": "ok",
-                "last_refresh_time": ts(),
-                "secret": "instapass{%s}" % access_qrcode_encode(g.dweller[0].id, id)}
+    dweller = in_community(id, g.dweller)
+    if dweller:
+        if not dweller.temp and dweller.inside:
+            return {"status": "ok",
+                    "last_refresh_time": ts(),
+                    "secret": "instapass{%s}reason" % access_qrcode_encode(g.dweller[0].id, id)}
+        else:
+            return {"status": "ok",
+                    "last_refresh_time": ts(),
+                    "secret": "instapass{%s}" % access_qrcode_encode(g.dweller[0].id, id)}
     else:
         return {"status": "error", "msg": "不属于此小区"}, 403
 
@@ -423,9 +429,13 @@ def certificate():
 @guard_required
 def validate_qrcode():
     try:
-        reason = request.json['reason']
         secret = request.json['secret']
-        jwt_secret = re.match("instapass{(.*)}", secret).groups()[0]
+        groups = re.match("instapass{(.*)}(.*)", secret).groups()
+        jwt_secret = groups[0]
+        if groups[1] == "reason":
+            reason = request.json['reason']
+        else:
+            reason = ""
         qr_json = decode(jwt_secret)
         if qr_json["type"] != "access":
             return {"status": "err", "msg": "无效 QR 码"}, 400
