@@ -439,7 +439,7 @@ def validate_qrcode():
             db.session.commit()
             return {"status": "ok", "validation": "accepted"}
         else:
-            return {"status": "err", "msg": "请求被拒绝"}, 403
+            return {"status": "err", "msg": "请先打卡上岗"}, 403
     except KeyError:
         return params_not_given()
     except ExpiredSignatureError:
