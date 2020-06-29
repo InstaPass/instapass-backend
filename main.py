@@ -20,6 +20,34 @@ app = Flask(__name__)
 
 # Tool methods
 
+def log_to_json(logs, community):
+    log_json = []
+    for log in logs:
+        log_json.append({
+            "community_id": community.id,
+            "community": community.name,
+            "address": community.address,
+            "time": log.access_time,
+            "reason": log.note,
+        })
+    return log_json
+
+
+def get_user_info(user):
+    return {
+        "status": "ok",
+        "variable_info": {
+            "nickname": user.nickname,
+            "phone_no": user.phone,
+            "mail_address": user.email_address
+        },
+        "static_info": {
+            "realname": user.name,
+            "id_number": user.id_number
+        }
+    }
+
+
 def get_communities(l):
     communities = []
     for elem in l:
@@ -352,20 +380,11 @@ def get_history(id):
     if not dweller:
         return {"status": "error"}, 403
     else:
-        log_json = []
-        for log in logs:
-            log_json.append({
-                "community_id": id,
-                "community": community.name,
-                "address": community.address,
-                "time": log.access_time,
-                "reason": log.note,
-            })
         return {
             "status": "ok",
             "current_status": "inside" if dweller.inside else "outside",
             "last_exit_time": dweller.last_access_time,
-            "history": log_json
+            "history": log_to_json(logs, community)
         }
 
 
@@ -373,18 +392,7 @@ def get_history(id):
 @login_required
 def get_info():
     if request.method == 'GET':
-        return {
-            "status": "ok",
-            "variable_info": {
-                "nickname": g.user.nickname,
-                "phone_no": g.user.phone,
-                "mail_address": g.user.email_address
-            },
-            "static_info": {
-                "realname": g.user.name,
-                "id_number": g.user.id_number
-            }
-        }
+        return get_user_info(g.user)
     else:
         try:
             g.user.nickname = request.json["variable_info"]["nickname"]
@@ -567,6 +575,44 @@ def admin_invite(id):
         return {"key": get_invitation(id)}
     else:
         return {"status": "error"}, 403
+
+
+@app.route('/admin/infos/<int:cid>', methods=['GET'])
+@admin_required
+def admin_infos(cid):
+    if in_community(cid, g.admin):
+        users = db.session.query(User).outerjoin(Dweller, Dweller.id == User.id).filter(
+            Dweller.community_id == cid).all()
+        usersJSON = []
+        for user in users:
+            usersJSON.append(get_user_info(user))
+        return {
+            "status": "ok",
+            "residents_info": usersJSON
+        }
+    else:
+        return {"status": "err"}, 403
+
+
+@app.route('/admin/history/<int:cid>', methods=['GET'])
+@admin_required
+def admin_history(cid):
+    if in_community(cid, g.admin):
+        users = db.session.query(User).outerjoin(Dweller, Dweller.id == User.id).filter(
+            Dweller.community_id == cid).all()
+        logs = Log.query.filter_by(community_id=cid).all()
+        usersJSON = []
+        for user in users:
+            j = get_user_info(user)
+            j['history'] = log_to_json(list(filter(lambda x : x.user_id == user.id, logs)),
+                                       Community.query.filter_by(id=cid).first())
+            usersJSON.append(j)
+        return {
+            "status": "ok",
+            "residents": usersJSON
+        }
+    else:
+        return {"status": "err"}, 403
 
 
 @app.errorhandler(405)
