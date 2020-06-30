@@ -29,6 +29,7 @@ def log_to_json(logs, community):
             "address": community.address,
             "time": log.access_time,
             "reason": log.note,
+            "where": log.inside
         })
     return log_json
 
