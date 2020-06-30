@@ -467,7 +467,7 @@ def validate_qrcode():
         guard = in_community(qr_json['community_id'], g.guard)
         if guard:
             if guard.working_until > ts():
-                dweller = Dweller.query.filter_by(id=qr_json['id']).first()
+                dweller = Dweller.query.filter_by(id=qr_json['id'], community_id=qr_json['community_id']).first()
                 dweller.last_access_time = ts()
                 dweller.inside = not dweller.inside
                 db.session.add(Log(community_id=qr_json['community_id'], user_id=qr_json['id'], temperature=37.0,
