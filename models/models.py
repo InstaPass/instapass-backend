@@ -79,3 +79,8 @@ class InviteKey(db.Model):
     community_id = db.Column('community_id', db.Integer)
     key = db.Column('key', db.String(64))
     used = db.Column('used', db.Boolean)
+
+
+class Strategy(db.Model):
+    community_id = db.Column('community_id', db.Integer, primary_key=True)
+    cool_down = db.Column('cool_down', db.Integer)

@@ -91,7 +91,17 @@ def valid_login(username: str, password: str):
 
 
 def valid_access(dweller: Dweller):
-    return True
+    if dweller.temp or not dweller.inside:
+        return 0
+    strategy = Strategy.query.filter_by(community_id=dweller.community_id).first()
+    if strategy is None:
+        strategy = Strategy(community_id=dweller.community_id, cool_down=0)
+        db.session.add(strategy)
+        db.session.commit()
+    if strategy.cool_down == -1:
+        return -1
+    next_time = max(strategy.cool_down - (ts() - dweller.last_access_time), 0)
+    return next_time
 
 
 def valid_invitation(key: str):
@@ -250,14 +260,18 @@ def login(role):
 def get_qrcode(id):
     dweller = in_community(id, g.dweller)
     if dweller:
-        if not dweller.temp and dweller.inside:
-            return {"status": "ok",
-                    "last_refresh_time": ts(),
-                    "secret": "instapass{%s}reason" % access_qrcode_encode(g.dweller[0].id, id)}
+        valid = valid_access(dweller)
+        if valid == 0:
+            if not dweller.temp and dweller.inside:
+                return {"status": "ok",
+                        "last_refresh_time": ts(),
+                        "secret": "instapass{%s}reason" % access_qrcode_encode(g.dweller[0].id, id)}
+            else:
+                return {"status": "ok",
+                        "last_refresh_time": ts(),
+                        "secret": "instapass{%s}" % access_qrcode_encode(g.dweller[0].id, id)}
         else:
-            return {"status": "ok",
-                    "last_refresh_time": ts(),
-                    "secret": "instapass{%s}" % access_qrcode_encode(g.dweller[0].id, id)}
+            return {"status": "error", "msg": f'距离下次出入时间还有{valid}秒'}, 400
     else:
         return {"status": "error", "msg": "不属于此小区"}, 403
 
@@ -448,16 +462,19 @@ def validate_qrcode():
         if qr_json["type"] != "access":
             return {"status": "err", "msg": "无效 QR 码"}, 400
         guard = in_community(qr_json['community_id'], g.guard)
-        if guard and guard.working_until > ts():
-            dweller = Dweller.query.filter_by(id=qr_json['id']).first()
-            dweller.last_access_time = ts()
-            dweller.inside = not dweller.inside
-            db.session.add(Log(community_id=qr_json['community_id'], user_id=qr_json['id'], temperature=37.0,
-                               note=reason, access_time=ts(), inside='inside' if dweller.inside else 'outside'))
-            db.session.commit()
-            return {"status": "ok", "validation": "accepted"}
+        if guard:
+            if guard.working_until > ts():
+                dweller = Dweller.query.filter_by(id=qr_json['id']).first()
+                dweller.last_access_time = ts()
+                dweller.inside = not dweller.inside
+                db.session.add(Log(community_id=qr_json['community_id'], user_id=qr_json['id'], temperature=37.0,
+                                   note=reason, access_time=ts(), inside='inside' if dweller.inside else 'outside'))
+                db.session.commit()
+                return {"status": "ok", "validation": "accepted"}
+            else:
+                return {"status": "err", "msg": "请先打卡上岗"}, 403
         else:
-            return {"status": "err", "msg": "请先打卡上岗"}, 403
+            return {"status": "err", "msg": "不属于此小区"}, 403
     except KeyError:
         return params_not_given()
     except ExpiredSignatureError:
@@ -469,6 +486,11 @@ def validate_qrcode():
 def generate_qrcode():
     try:
         community_id = request.json["community_id"]
+        guard = in_community(community_id, g.guard)
+        if not guard:
+            return {"status": "err", "msg": "不属于此小区"}, 403
+        if guard.working_until < ts():
+            return {"status": "err", "msg": "请先打卡上岗"}, 403
         temp = request.json["temporary"]
         if temp:
             reason = request.json['reason']
@@ -613,6 +635,42 @@ def admin_history(cid):
         }
     else:
         return {"status": "err"}, 403
+
+
+@app.route('/admin/strategy', methods=['GET', 'POST'])
+@admin_required
+def strategy():
+    if request.method == 'GET':
+        strategies = []
+        for a in g.admin:
+            s = Strategy.query.filter_by(community_id=a.community_id).first()
+            if s is None:
+                s = Strategy(community_id=a.community_id, cool_down=0)
+                db.session.add(s)
+            strategies.append({
+                "community_id": s.community_id,
+                "cool_down": s.cool_down
+            })
+        db.session.commit()
+        return {
+            "status": "ok",
+            "strategies": strategies
+        }
+    else:
+        try:
+            community_id = request.json["community_id"]
+            if in_community(community_id, g.admin):
+                s = Strategy.query.filter_by(community_id=community_id).first()
+                if s is None:
+                    s = Strategy(community_id=community_id)
+                    db.session.add(s)
+                s.cool_down = request.json["cool_down"]
+                db.session.commit()
+                return {"status": "ok"}
+            else:
+                return {"status": "err", "msg": "访问被拒绝"}, 403
+        except KeyError:
+            return params_not_given()
 
 
 @app.errorhandler(405)
