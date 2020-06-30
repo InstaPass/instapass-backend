@@ -271,7 +271,10 @@ def get_qrcode(id):
                         "last_refresh_time": ts(),
                         "secret": "instapass{%s}" % access_qrcode_encode(g.dweller[0].id, id)}
         else:
-            return {"status": "error", "msg": f'距离下次出入时间还有{valid}秒', "next_access_time": ts() + valid}, 400
+            if valid == -1:
+                return {"status": "error", "msg": f'距离下次出入时间还有{valid}秒', "next_access_time": ts() + valid}, 400
+            else:
+                return {"status": "error", "msg": '当前社区已禁止出入', "next_access_time": -1}, 400
     else:
         return {"status": "error", "msg": "不属于此小区"}, 403
 
